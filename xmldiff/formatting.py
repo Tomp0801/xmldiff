@@ -14,6 +14,7 @@ DIFF_PREFIX = "diff"
 INSERT_NAME = "{%s}insert" % DIFF_NS
 DELETE_NAME = "{%s}delete" % DIFF_NS
 RENAME_NAME = "{%s}rename" % DIFF_NS
+MOVED_NAME =  "{%s}move"   % DIFF_NS
 
 # Flags for whitespace handling in the text aware formatters:
 WS_BOTH = 3  # Normalize ignorable whitespace and text whitespace
@@ -452,8 +453,12 @@ class XMLFormatter(BaseFormatter):
         node = self._xpath(tree, action.node)
         self._insert_attrib(node, action.name, action.value)
 
-    def _insert_node(self, target, node, position):
-        node.attrib[INSERT_NAME] = ""
+    def _insert_node(self, target, node, position, moved=False):
+        if moved:
+            node.attrib[MOVED_NAME] = ""
+            node.attrib["old_path"] = utils.getpath(node)
+        else:
+            node.attrib[INSERT_NAME] = ""
         target.insert(position, node)
 
     def _get_real_insert_position(self, target, position):
@@ -491,11 +496,11 @@ class XMLFormatter(BaseFormatter):
 
     def _handle_MoveNode(self, action, tree):
         node = self._xpath(tree, action.node)
-        inserted = deepcopy(node)
         target = self._xpath(tree, action.target)
-        self._delete_node(node)
+        node.attrib[DELETE_NAME] = ""
         position = self._get_real_insert_position(target, action.position)
-        self._insert_node(target, inserted, position)
+        del node.attrib[DELETE_NAME]
+        self._insert_node(target, node, position, moved=True)
 
     def _handle_RenameNode(self, action, tree):
         node = self._xpath(tree, action.node)
