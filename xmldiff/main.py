@@ -5,7 +5,7 @@ from argparse import ArgumentParser, ArgumentTypeError
 from lxml import etree
 from xmldiff import diff, formatting, patch
 
-__version__ = pkg_resources.require("xmldiff")[0].version
+#__version__ = pkg_resources.require("xmldiff")[0].version
 
 FORMATTERS = {
     "diff": formatting.DiffFormatter,
