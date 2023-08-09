@@ -618,6 +618,49 @@ class XMLFormatter(BaseFormatter):
         if not skip_next:
             new_diffs.append(diffs[-1])
         return new_diffs
+    
+    def _expand_diffs_to_words(self, diffs):
+        for i in range(len(diffs)):
+            op, text = diffs[i]
+            # no need to expand equalities
+            if op==diff_match_patch.DIFF_EQUAL:
+                continue
+            # join with previous
+            if i > 0:
+                prev_op, prev_text = diffs[i-1]
+                print(prev_op)
+                print(prev_text, text)
+                if len(prev_text) > 0:
+                    # steal characters until whitespace occurs
+                    c = prev_text[-1]
+                    while c not in [" \n\t"]:
+                        text = c + text
+                        prev_text = prev_text[:-1]
+                        if len(prev_text) == 0:
+                            break
+                        c = prev_text[-1]
+                        print(prev_text, text)
+                    diffs[i] = (op, text)
+                    diffs[i-1] = (prev_op, prev_text)
+            # join with next 
+            if i < len(diffs)-1:
+                next_op, next_text = diffs[i+1]
+                print(next_op)
+                print(next_text, text)
+                if len(next_text) > 0:
+                    # steal characters until whitespace occurs
+                    c = next_text[0]
+                    while c not in [" \n\t"]:
+                        text = text + c
+                        next_text = next_text[1:]
+                        if len(next_text) == 0:
+                            break
+                        c = next_text[0]
+                        print(next_text, text)
+                    diffs[i] = (op, text)
+                    diffs[i+1] = (next_op, next_text)
+
+        return diffs
 
     def _make_diff_tags(self, left_value, right_value, node, target=None):
         if bool(self.normalize & WS_TEXT):
@@ -628,6 +671,7 @@ class XMLFormatter(BaseFormatter):
         diff = text_diff.diff_main(left_value or "", right_value or "")
         text_diff.diff_cleanupSemantic(diff)
         diff = self._realign_placeholders(diff)
+        diff = self._expand_diffs_to_words(diff)
 
         if self.use_replace:
             diff = self._join_delete_insert(diff)
