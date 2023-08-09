@@ -620,46 +620,63 @@ class XMLFormatter(BaseFormatter):
         return new_diffs
     
     def _expand_diffs_to_words(self, diffs):
+        print(diffs)
         for i in range(len(diffs)):
             op, text = diffs[i]
             # no need to expand equalities
             if op==diff_match_patch.DIFF_EQUAL:
                 continue
             # join with previous
-            if i > 0:
-                prev_op, prev_text = diffs[i-1]
-                print(prev_op)
-                print(prev_text, text)
-                if len(prev_text) > 0:
-                    # steal characters until whitespace occurs
-                    c = prev_text[-1]
-                    while c not in [" \n\t"]:
-                        text = c + text
-                        prev_text = prev_text[:-1]
-                        if len(prev_text) == 0:
-                            break
-                        c = prev_text[-1]
-                        print(prev_text, text)
-                    diffs[i] = (op, text)
-                    diffs[i-1] = (prev_op, prev_text)
-            # join with next 
-            if i < len(diffs)-1:
-                next_op, next_text = diffs[i+1]
-                print(next_op)
-                print(next_text, text)
-                if len(next_text) > 0:
-                    # steal characters until whitespace occurs
-                    c = next_text[0]
-                    while c not in [" \n\t"]:
-                        text = text + c
-                        next_text = next_text[1:]
-                        if len(next_text) == 0:
-                            break
-                        c = next_text[0]
-                        print(next_text, text)
-                    diffs[i] = (op, text)
-                    diffs[i+1] = (next_op, next_text)
+            # find previous equality
+            i_eq_prev = i
+            while i_eq_prev >= 0 and diffs[i_eq_prev][0] != diff_match_patch.DIFF_EQUAL:
+                i_eq_prev -= 1
+            if i_eq_prev >= 0:
+                prev_op, prev_text = diffs[i_eq_prev]
+                print(f"before: {prev_text} | {text}")
+                i_c_prev = len(prev_text) - 1
+                # steal characters until whitespace occurs
+                while i_c_prev > 0 and not prev_text[i_c_prev].isspace():
+                    i_c_prev -= 1
+                text = prev_text[i_c_prev+1:] + text
+                diffs[i] = (op, text)
+                diffs[i_eq_prev] = (prev_op, prev_text[:i_c_prev+1])
+                print(f"after: {prev_text[:i_c_prev+1]} | {text}")
+            else:
+                prev_text = ""
+                i_c_prev = -1
 
+            # join with next
+            # find next equality
+            i_eq_next = i
+            while i_eq_next < len(diffs) and diffs[i_eq_next][0] != diff_match_patch.DIFF_EQUAL:
+                i_eq_next += 1
+            # no next equality -> cant do anything
+            if i_eq_next < len(diffs):
+                next_op, next_text = diffs[i_eq_next]
+                print(f"before: {text} | {next_text}")
+                i_c_next = 0
+                # steal characters until whitespace occurs
+                while i_c_next <= len(next_text)-1 and not next_text[i_c_next].isspace():
+                    i_c_next += 1
+                text = text + next_text[:i_c_next]
+                diffs[i] = (op, text)
+                diffs[i_eq_next] = (next_op, next_text[i_c_next:])
+                print(f"after: {text} | {next_text[i_c_next:]}")
+            else:
+                next_text = ""
+                i_c_next = 0
+            # check for other diff between these
+            print(i_eq_prev, i_eq_next)
+            for i_sibling in range(i_eq_prev+1, i_eq_next):
+                op_sibling, text_sibling = diffs[i_sibling]
+                if (op == diff_match_patch.DIFF_DELETE and op_sibling == diff_match_patch.DIFF_INSERT) \
+                    or (op == diff_match_patch.DIFF_INSERT and op_sibling == diff_match_patch.DIFF_DELETE):
+                        print(f"found {op_sibling}")
+                        text_sibling = prev_text[i_c_prev+1:] + text_sibling + next_text[:i_c_next]
+                diffs[i_sibling] = (op_sibling, text_sibling)
+
+        print(diffs)
         return diffs
 
     def _make_diff_tags(self, left_value, right_value, node, target=None):
