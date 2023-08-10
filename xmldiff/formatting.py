@@ -6,6 +6,7 @@ from copy import deepcopy
 from lxml import etree
 from xmldiff.diff_match_patch import diff_match_patch
 from xmldiff import utils
+from string import punctuation
 
 
 DIFF_NS = "http://namespaces.shoobx.com/diff"
@@ -618,6 +619,127 @@ class XMLFormatter(BaseFormatter):
         if not skip_next:
             new_diffs.append(diffs[-1])
         return new_diffs
+    
+    def is_delimiter(self, c):
+        if c.isspace():
+            return True
+        if c in punctuation:
+            return True
+        return False
+    
+    def _expand_diffs_to_words(self, diffs):
+        print(diffs)
+        i = 0
+        while i < len(diffs):
+            op, text = diffs[i]
+            # no need to expand equalities
+            if op==diff_match_patch.DIFF_EQUAL:
+                i += 1
+                continue
+            # if already starts with whitespace, skip
+            print(i, text)
+            if text is not None and len(text) > 0 and not self.is_delimiter(text[0]):
+                # join with previous
+                # find previous equality
+                i_eq_prev = i
+                while i_eq_prev >= 0 and diffs[i_eq_prev][0] != diff_match_patch.DIFF_EQUAL:
+                    i_eq_prev -= 1
+                if i_eq_prev >= 0:
+                    prev_op, prev_text = diffs[i_eq_prev]
+                    print(f"before: {prev_text} | {text}")
+                    i_c_prev = len(prev_text) - 1
+                    # steal characters until whitespace occurs
+                    while i_c_prev > 0 and not self.is_delimiter(prev_text[i_c_prev]):
+                        i_c_prev -= 1
+                    text = prev_text[i_c_prev+1:] + text
+                    diffs[i] = (op, text)
+                    diffs[i_eq_prev] = (prev_op, prev_text[:i_c_prev+1])
+                    # add opposite op
+                    if op == diff_match_patch.DIFF_DELETE:
+                        new_op = (diff_match_patch.DIFF_INSERT, prev_text[i_c_prev+1:])
+                    elif op == diff_match_patch.DIFF_INSERT:
+                        new_op = (diff_match_patch.DIFF_DELETE, prev_text[i_c_prev+1:])
+                    diffs.insert(i_eq_prev + 1, new_op)
+                    i += 1
+                    print(f"after: {prev_text[:i_c_prev+1]} | {text}")
+                else:
+                    prev_text = ""
+                    i_c_prev = -1
+
+            # if already ends with whitespace, skip
+            if text is not None and len(text) > 0 and not self.is_delimiter(text[-1]):
+                # join with next
+                # find next equality
+                i_eq_next = i
+                while i_eq_next < len(diffs) and diffs[i_eq_next][0] != diff_match_patch.DIFF_EQUAL:
+                    i_eq_next += 1
+                # no next equality -> cant do anything
+                if i_eq_next < len(diffs):
+                    next_op, next_text = diffs[i_eq_next]
+                    print(f"before: {text} | {next_text}")
+                    i_c_next = 0
+                    # steal characters until whitespace occurs
+                    while i_c_next < len(next_text) and not self.is_delimiter(next_text[i_c_next]):
+                        i_c_next += 1
+                    text = text + next_text[:i_c_next]
+                    diffs[i] = (op, text)
+                    diffs[i_eq_next] = (next_op, next_text[i_c_next:])
+                    # add opposite op
+                    if op == diff_match_patch.DIFF_DELETE:
+                        new_op = (diff_match_patch.DIFF_INSERT, next_text[:i_c_next])
+                    elif op == diff_match_patch.DIFF_INSERT:
+                        new_op = (diff_match_patch.DIFF_DELETE, next_text[:i_c_next])
+                    diffs.insert(i_eq_next, new_op)
+                    i += 1
+                    print(f"after: {text} | {next_text[i_c_next:]}")
+                else:
+                    next_text = ""
+                    i_c_next = 0
+            i += 1
+
+        print(diffs)
+        diffs = self._quick_cleanup(diffs)
+        print(diffs)
+        return diffs
+    
+    def _quick_cleanup(self, diffs):
+        cleaned_diffs = []
+        inserts = []
+        deletes = []
+        for diff in diffs:
+            if diff[0] == diff_match_patch.DIFF_EQUAL and len(diff[1]) > 0:
+                if len(inserts) > 0:
+                    text = ""
+                    for ins in inserts:
+                        text += ins[1]
+                    cleaned_diffs.append((diff_match_patch.DIFF_INSERT, text))
+                if len(deletes) > 0:
+                    text = ""
+                    for d in deletes:
+                        text += d[1]
+                    cleaned_diffs.append((diff_match_patch.DIFF_DELETE, text))
+                inserts = []
+                deletes = []
+                cleaned_diffs.append(diff)
+            # collect all inserts and deletes between equalities. Ignore empty diffs.
+            elif diff[0] == diff_match_patch.DIFF_INSERT and len(diff[1]) > 0:
+                inserts.append(diff)
+            elif diff[0] == diff_match_patch.DIFF_DELETE and len(diff[1]) > 0:
+                deletes.append(diff)
+        if len(inserts) > 0:
+            text = ""
+            for ins in inserts:
+                text += ins[1]
+            if len(text) > 0:
+                cleaned_diffs.append((diff_match_patch.DIFF_INSERT, text))
+        if len(deletes) > 0:
+            text = ""
+            for d in deletes:
+                text += d[1]
+            if len(text) > 0:
+                cleaned_diffs.append((diff_match_patch.DIFF_DELETE, text))
+        return cleaned_diffs
+
 
     def _make_diff_tags(self, left_value, right_value, node, target=None):
         if bool(self.normalize & WS_TEXT):
@@ -628,6 +750,7 @@ class XMLFormatter(BaseFormatter):
         diff = text_diff.diff_main(left_value or "", right_value or "")
         text_diff.diff_cleanupSemantic(diff)
         diff = self._realign_placeholders(diff)
+        diff = self._expand_diffs_to_words(diff)
 
         if self.use_replace:
             diff = self._join_delete_insert(diff)
