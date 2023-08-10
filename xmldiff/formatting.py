@@ -721,9 +721,10 @@ class XMLFormatter(BaseFormatter):
                 inserts = []
                 deletes = []
                 cleaned_diffs.append(diff)
-            elif diff[0] == diff_match_patch.DIFF_INSERT:
+            # collect all inserts and deletes between equalities. Ignore empty diffs.
+            elif diff[0] == diff_match_patch.DIFF_INSERT and len(diff[1]) > 0:
                 inserts.append(diff)
-            elif diff[0] == diff_match_patch.DIFF_DELETE:
+            elif diff[0] == diff_match_patch.DIFF_DELETE and len(diff[1]) > 0:
                 deletes.append(diff)
         if len(inserts) > 0:
             text = ""
