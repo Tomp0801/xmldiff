@@ -685,10 +685,45 @@ class XMLFormatter(BaseFormatter):
             i += 1
 
         print(diffs)
-        dummy = diff_match_patch()
-        dummy.diff_cleanupMerge(diffs, check_redundancies=False)
+        diffs = self._quick_cleanup(diffs)
         print(diffs)
         return diffs
+    
+    def _quick_cleanup(self, diffs):
+        cleaned_diffs = []
+        inserts = []
+        deletes = []
+        for diff in diffs:
+            if diff[0] == diff_match_patch.DIFF_EQUAL and len(diff[1]) > 0:
+                if len(inserts) > 0:
+                    text = ""
+                    for ins in inserts:
+                        text += ins[1]
+                    cleaned_diffs.append((diff_match_patch.DIFF_INSERT, text))
+                if len(deletes) > 0:
+                    text = ""
+                    for d in deletes:
+                        text += d[1]
+                    cleaned_diffs.append((diff_match_patch.DIFF_DELETE, text))
+                inserts = []
+                deletes = []
+                cleaned_diffs.append(diff)
+            elif diff[0] == diff_match_patch.DIFF_INSERT:
+                inserts.append(diff)
+            elif diff[0] == diff_match_patch.DIFF_DELETE:
+                deletes.append(diff)
+        if len(inserts) > 0:
+            text = ""
+            for ins in inserts:
+                text += ins[1]
+            cleaned_diffs.append((diff_match_patch.DIFF_INSERT, text))
+        if len(deletes) > 0:
+            text = ""
+            for d in deletes:
+                text += d[1]
+            cleaned_diffs.append((diff_match_patch.DIFF_DELETE, text))
+        return cleaned_diffs
+
 
     def _make_diff_tags(self, left_value, right_value, node, target=None):
         if bool(self.normalize & WS_TEXT):

@@ -971,7 +971,7 @@ class diff_match_patch:
         if changes:
             self.diff_cleanupMerge(diffs)
 
-    def diff_cleanupMerge(self, diffs, check_redundancies=True):
+    def diff_cleanupMerge(self, diffs):
         """Reorder and merge like edit sections.  Merge equalities.
         Any edit section can move as long as it doesn't cross an equality.
 
@@ -995,11 +995,11 @@ class diff_match_patch:
                 pointer += 1
             elif diffs[pointer][0] == self.DIFF_EQUAL:
                 # Upon reaching an equality, check for prior redundancies.
-                if check_redundancies and count_delete + count_insert > 1:
+                if count_delete + count_insert > 1:
                     if count_delete != 0 and count_insert != 0:
                         # Factor out any common prefixies.
                         commonlength = self.diff_commonPrefix(text_insert, text_delete)
-                        if check_redundancies and commonlength != 0:
+                        if commonlength != 0:
                             x = pointer - count_delete - count_insert - 1
                             if x >= 0 and diffs[x][0] == self.DIFF_EQUAL:
                                 diffs[x] = (
@@ -1015,7 +1015,7 @@ class diff_match_patch:
                             text_delete = text_delete[commonlength:]
                         # Factor out any common suffixies.
                         commonlength = self.diff_commonSuffix(text_insert, text_delete)
-                        if check_redundancies and commonlength != 0:
+                        if commonlength != 0:
                             diffs[pointer] = (
                                 diffs[pointer][0],
                                 text_insert[-commonlength:] + diffs[pointer][1],
