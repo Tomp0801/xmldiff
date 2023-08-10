@@ -621,10 +621,12 @@ class XMLFormatter(BaseFormatter):
     
     def _expand_diffs_to_words(self, diffs):
         print(diffs)
-        for i in range(len(diffs)):
+        i = 0
+        while i < len(diffs):
             op, text = diffs[i]
             # no need to expand equalities
             if op==diff_match_patch.DIFF_EQUAL:
+                i += 1
                 continue
             # join with previous
             # find previous equality
@@ -641,6 +643,13 @@ class XMLFormatter(BaseFormatter):
                 text = prev_text[i_c_prev+1:] + text
                 diffs[i] = (op, text)
                 diffs[i_eq_prev] = (prev_op, prev_text[:i_c_prev+1])
+                # add opposite op
+                if op == diff_match_patch.DIFF_DELETE:
+                    new_op = (diff_match_patch.DIFF_INSERT, prev_text[i_c_prev+1:])
+                elif op == diff_match_patch.DIFF_INSERT:
+                    new_op = (diff_match_patch.DIFF_DELETE, prev_text[i_c_prev+1:])
+                diffs.insert(i, new_op)
+                i += 1
                 print(f"after: {prev_text[:i_c_prev+1]} | {text}")
             else:
                 prev_text = ""
@@ -662,20 +671,22 @@ class XMLFormatter(BaseFormatter):
                 text = text + next_text[:i_c_next]
                 diffs[i] = (op, text)
                 diffs[i_eq_next] = (next_op, next_text[i_c_next:])
+                # add opposite op
+                if op == diff_match_patch.DIFF_DELETE:
+                    new_op = (diff_match_patch.DIFF_INSERT, next_text[:i_c_next])
+                elif op == diff_match_patch.DIFF_INSERT:
+                    new_op = (diff_match_patch.DIFF_DELETE, next_text[:i_c_next])
+                diffs.insert(i+1, new_op)
+                i += 1
                 print(f"after: {text} | {next_text[i_c_next:]}")
             else:
                 next_text = ""
                 i_c_next = 0
-            # check for other diff between these
-            print(i_eq_prev, i_eq_next)
-            for i_sibling in range(i_eq_prev+1, i_eq_next):
-                op_sibling, text_sibling = diffs[i_sibling]
-                if (op == diff_match_patch.DIFF_DELETE and op_sibling == diff_match_patch.DIFF_INSERT) \
-                    or (op == diff_match_patch.DIFF_INSERT and op_sibling == diff_match_patch.DIFF_DELETE):
-                        print(f"found {op_sibling}")
-                        text_sibling = prev_text[i_c_prev+1:] + text_sibling + next_text[:i_c_next]
-                diffs[i_sibling] = (op_sibling, text_sibling)
+            i += 1
 
+        print(diffs)
+        dummy = diff_match_patch()
+        dummy.diff_cleanupMerge(diffs, check_redundancies=False)
         print(diffs)
         return diffs
 
